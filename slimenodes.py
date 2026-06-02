@@ -98,15 +98,27 @@ def bal(s):
 def renew(s, server_id):
     """Renew server. Returns True if successful."""
     log(f"Renewing server {server_id}...")
-    body = run_curl(["-L", "-H", f"User-Agent: {UA}", "-H", f"Cookie: {ck(s)}",
-                     f"{BASE}/renew?id={server_id}"])
-    if "success=RENEWED" in body or "RENEWED" in body:
-        ok("Server renewed!")
-        return True
-    if "/login" in body:
-        er("Session expired during renew"); return False
-    er(f"Renew result: {body[:200]}")
-    return False
+    # Use -w to capture final URL after redirects
+    cmd = ["curl", "-s", "-L", "-w", "\n%{url_effective}", "--connect-timeout", "20", "--max-time", "20"]
+    cmd += ["-H", f"User-Agent: {UA}", "-H", f"Cookie: {ck(s)}",
+            f"{BASE}/renew?id={server_id}"]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=25)
+        output = result.stdout
+        # Last line is the final URL
+        lines = output.strip().split("\n")
+        final_url = lines[-1] if lines else ""
+        body = "\n".join(lines[:-1]) if len(lines) > 1 else ""
+        log(f"Renew URL: {final_url[:80]}")
+        if "success=RENEWED" in final_url or "RENEWED" in final_url:
+            ok("Server renewed!")
+            return True
+        if "/login" in final_url:
+            er("Session expired during renew"); return False
+        er(f"Renew failed: {final_url[:80]}")
+        return False
+    except Exception as e:
+        er(f"Renew error: {e}"); return False
 
 def process(session_id, label="acct"):
     log(f"\n{'='*40}\n账号: {label}\n{'='*40}")
