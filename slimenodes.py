@@ -15,6 +15,7 @@ PX = os.environ.get("SOCKS_PROXY", os.environ.get("HTTP_PROXY", ""))
 SESSION = os.environ.get("SLIME_SESSION", "")
 SERVER_ID = os.environ.get("SERVER_ID", "10102")
 RENEW_THRESHOLD = int(os.environ.get("RENEW_THRESHOLD", "50"))
+RENEW_HOURS = int(os.environ.get("RENEW_HOURS", "72"))  # Only renew if <72h left
 
 def px(): return ["-x", PX] if PX else []
 def log(m): print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] {m}", flush=True)
@@ -156,13 +157,25 @@ def process(session_id, label="acct"):
     actual = max(b1 - b0, 0) if b0 is not None and b1 is not None else earned
     log(f"刷币完成: {b1}币 (本次+{actual})")
 
-    # Auto-renew if balance sufficient
+    # Auto-renew if balance sufficient AND server expiring soon
     renewed = False
     if b1 is not None and b1 >= RENEW_THRESHOLD:
-        renewed = renew(session_id, SERVER_ID)
-        if renewed:
-            b2 = bal(session_id)
-            log(f"续期后余额: {b2}")
+        # Check expiration time first
+        body = run_curl(["-L", "-H", f"User-Agent: {UA}", "-H", f"Cookie: {ck(session_id)}",
+                         f"{BASE}/servers"])
+        # Parse remaining hours from page
+        hours_left = None
+        m = re.search(r'(\d+)\s*hours?', body)
+        if m:
+            hours_left = int(m.group(1))
+            log(f"服务器剩余: {hours_left}小时")
+        if hours_left is not None and hours_left > RENEW_HOURS:
+            log(f"离到期还有{hours_left}小时，暂不续期 (>{RENEW_HOURS}h)")
+        else:
+            renewed = renew(session_id, SERVER_ID)
+            if renewed:
+                b2 = bal(session_id)
+                log(f"续期后余额: {b2}")
     elif b1 is not None:
         log(f"余额不足续期 (需要{RENEW_THRESHOLD}币, 当前{b1}币)")
 
