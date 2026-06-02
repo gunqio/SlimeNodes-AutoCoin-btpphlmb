@@ -187,13 +187,42 @@ def main():
     if not SESSION:
         er("SLIME_SESSION未设置!"); sys.exit(1)
     c, d, b1, renewed = process(SESSION, "btpphlmb")
-    lines = ["<b>🟢 SlimeNodes</b>"]
+    
+    # Get expiration info
+    hours_left = None
+    cd_body = run_curl(["-H", f"User-Agent: {UA}", "-H", f"Cookie: {ck(SESSION)}",
+                        f"{BASE}/lastrenew?id={SERVER_ID}"])
+    try:
+        last_renew_ms = json.loads(cd_body).get("lastrenew", 0)
+        now_ms = time.time() * 1000
+        hours_left = (last_renew_ms - now_ms) / (1000 * 60 * 60)
+    except: pass
+    
+    # Build detailed TG message
+    lines = ["<b>🟢 SlimeNodes 刷币通知</b>"]
+    lines.append(f"━━━━━━━━━━━━━━━━")
+    lines.append(f"👤 账号: btpphlmb@outlook.com")
+    lines.append(f"━━━━━━━━━━━━━━━━")
+    
     s = "✅" if c > 0 else "❌"
-    dl = " (上限)" if d else ""
-    bl = f" | 余额{b1}" if b1 is not None else ""
-    lines.append(f"刷币: {s} +{c}币{dl}{bl}")
+    dl = " (已达每日上限)" if d else ""
+    lines.append(f"💰 刷币: {s} +{c}币{dl}")
+    
+    if b1 is not None:
+        lines.append(f"🏦 余额: {b1}币")
+    
+    if hours_left is not None:
+        days = hours_left / 24
+        lines.append(f"⏰ 到期: {hours_left:.0f}小时后 ({days:.1f}天)")
+    
     if renewed:
-        lines.append("续期: ✅ 已续期")
+        lines.append(f"🔄 续期: ✅ 已续期")
+    elif hours_left is not None and hours_left > RENEW_HOURS:
+        lines.append(f"🔄 续期: ⏭️ 暂不需要 (>{RENEW_HOURS}h)")
+    elif b1 is not None and b1 < RENEW_THRESHOLD:
+        lines.append(f"🔄 续期: ⚠️ 余额不足 (需{RENEW_THRESHOLD}币)")
+    
+    lines.append(f"━━━━━━━━━━━━━━━━")
     send_tg("\n".join(lines))
     log("完成!")
 
