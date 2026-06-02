@@ -15,7 +15,7 @@ PX = os.environ.get("SOCKS_PROXY", os.environ.get("HTTP_PROXY", ""))
 SESSION = os.environ.get("SLIME_SESSION", "")
 SERVER_ID = os.environ.get("SERVER_ID", "10102")
 RENEW_THRESHOLD = int(os.environ.get("RENEW_THRESHOLD", "50"))
-RENEW_HOURS = int(os.environ.get("RENEW_HOURS", "72"))  # Only renew if <72h left
+RENEW_HOURS = int(os.environ.get("RENEW_HOURS", "24"))  # Only renew if <72h left
 
 def px(): return ["-x", PX] if PX else []
 def log(m): print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] {m}", flush=True)
