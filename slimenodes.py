@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""SlimeNodes Auto-Coin - Pure HTTP, no browser needed."""
+"""SlimeNodes Auto-Coin + Auto-Renew"""
 import os, sys, re, json, time, base64, random, subprocess
-from urllib.parse import unquote, quote
+from urllib.parse import unquote
 from datetime import datetime, timezone
 
 BASE = "https://dash.slimenodes.com"
-CPC = 12  # coins per claim
-WAIT = 16  # min seconds between gen and redeem
+CPC = 12
+WAIT = 16
 MAX = int(os.environ.get("MAX_ADS", "20"))
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
 TGT = os.environ.get("TG_BOT_TOKEN", "")
 TGC = os.environ.get("TG_CHAT_ID", "")
 PX = os.environ.get("SOCKS_PROXY", os.environ.get("HTTP_PROXY", ""))
 SESSION = os.environ.get("SLIME_SESSION", "")
+SERVER_ID = os.environ.get("SERVER_ID", "10102")
+RENEW_THRESHOLD = int(os.environ.get("RENEW_THRESHOLD", "50"))
 
 def px(): return ["-x", PX] if PX else []
 def log(m): print(f"[{datetime.now(timezone.utc).strftime('%H:%M:%S')}] {m}", flush=True)
@@ -93,12 +95,26 @@ def bal(s):
     m = re.search(r'balance\.textContent\s*=\s*Math\.floor\((\d+)\s*\*\s*100\)', body)
     return int(m.group(1)) if m else None
 
+def renew(s, server_id):
+    """Renew server. Returns True if successful."""
+    log(f"Renewing server {server_id}...")
+    body = run_curl(["-L", "-H", f"User-Agent: {UA}", "-H", f"Cookie: {ck(s)}",
+                     f"{BASE}/renew?id={server_id}"])
+    if "success=RENEWED" in body or "RENEWED" in body:
+        ok("Server renewed!")
+        return True
+    if "/login" in body:
+        er("Session expired during renew"); return False
+    er(f"Renew result: {body[:200]}")
+    return False
+
 def process(session_id, label="acct"):
     log(f"\n{'='*40}\n账号: {label}\n{'='*40}")
     b0 = bal(session_id)
     if b0 is not None: log(f"余额: {b0}币")
     else: er("无法获取余额")
 
+    # Earn coins
     earned = 0; bypass = 0; daily = False
     for i in range(MAX):
         cd = cooldown(session_id)
@@ -126,18 +142,31 @@ def process(session_id, label="acct"):
 
     b1 = bal(session_id)
     actual = max(b1 - b0, 0) if b0 is not None and b1 is not None else earned
-    log(f"最终: {b1}币 (本次+{actual})")
-    return actual, daily, b1
+    log(f"刷币完成: {b1}币 (本次+{actual})")
+
+    # Auto-renew if balance sufficient
+    renewed = False
+    if b1 is not None and b1 >= RENEW_THRESHOLD:
+        renewed = renew(session_id, SERVER_ID)
+        if renewed:
+            b2 = bal(session_id)
+            log(f"续期后余额: {b2}")
+    elif b1 is not None:
+        log(f"余额不足续期 (需要{RENEW_THRESHOLD}币, 当前{b1}币)")
+
+    return actual, daily, b1, renewed
 
 def main():
     if not SESSION:
         er("SLIME_SESSION未设置!"); sys.exit(1)
-    c, d, b1 = process(SESSION, "btpp39")
-    lines = ["<b>🟢 SlimeNodes 刷币</b>"]
+    c, d, b1, renewed = process(SESSION, "btpphlmb")
+    lines = ["<b>🟢 SlimeNodes</b>"]
     s = "✅" if c > 0 else "❌"
     dl = " (上限)" if d else ""
     bl = f" | 余额{b1}" if b1 is not None else ""
-    lines.append(f"{s} +{c}币{dl}{bl}")
+    lines.append(f"刷币: {s} +{c}币{dl}{bl}")
+    if renewed:
+        lines.append("续期: ✅ 已续期")
     send_tg("\n".join(lines))
     log("完成!")
 
