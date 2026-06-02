@@ -160,17 +160,19 @@ def process(session_id, label="acct"):
     # Auto-renew if balance sufficient AND server expiring soon
     renewed = False
     if b1 is not None and b1 >= RENEW_THRESHOLD:
-        # Check expiration time first
-        body = run_curl(["-L", "-H", f"User-Agent: {UA}", "-H", f"Cookie: {ck(session_id)}",
-                         f"{BASE}/servers"])
-        # Parse remaining hours from page
+                # Check expiration via API
+        cd_body = run_curl(["-H", f"User-Agent: {UA}", "-H", f"Cookie: {ck(session_id)}",
+                            f"{BASE}/lastrenew?id={SERVER_ID}"])
         hours_left = None
-        m = re.search(r'(\d+)\s*hours?', body)
-        if m:
-            hours_left = int(m.group(1))
-            log(f"服务器剩余: {hours_left}小时")
+        try:
+            last_renew_ms = json.loads(cd_body).get("lastrenew", 0)
+            now_ms = time.time() * 1000
+            hours_left = (last_renew_ms - now_ms) / (1000 * 60 * 60)
+            log(f"服务器剩余: {hours_left:.0f}小时")
+        except:
+            log("无法获取到期时间")
         if hours_left is not None and hours_left > RENEW_HOURS:
-            log(f"离到期还有{hours_left}小时，暂不续期 (>{RENEW_HOURS}h)")
+            log(f"离到期还有{hours_left:.0f}小时，暂不续期 (>{RENEW_HOURS}h)")
         else:
             renewed = renew(session_id, SERVER_ID)
             if renewed:
