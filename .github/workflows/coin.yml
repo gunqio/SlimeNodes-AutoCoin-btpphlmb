@@ -2,8 +2,8 @@ name: SlimeNodes Auto Coin
 
 on:
   schedule:
-- cron: '30 16 * * *'   # 北京时间 00:30
-- cron: '30 4 * * *'    # 北京时间 12:30
+    - cron: '30 16 * * *'   # 北京时间 00:30
+    - cron: '30 4 * * *'    # 北京时间 12:30
   workflow_dispatch:
 
 jobs:
