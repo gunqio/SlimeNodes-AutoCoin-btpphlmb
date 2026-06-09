@@ -10,7 +10,7 @@ jobs:
       - name: Checkout 当前仓库
         uses: actions/checkout@v4
 
-      - name: 从私有仓库拉取
+      - name: 私仓
         uses: actions/checkout@v4
         with:
           repository: gunqio/zhiyong
