@@ -2,8 +2,8 @@ name: SlimeNodes Auto Renew
 
 on:
   schedule:
-    - cron: '0 0 */6 * *'
-  workflow_dispatch:
+    - cron: '0 0 */6 * *'      # 每6天运行一次
+  workflow_dispatch:            # 允许手动触发
 
 jobs:
   run-automation:
@@ -12,22 +12,32 @@ jobs:
       - name: 📥 下载私库脚本
         uses: actions/checkout@v4
         with:
-          repository: ${{ github.repository_owner }}/slimenodes-renew-private
-          token: ${{ secrets.PAT_TOKEN }}
+          repository: gunqio/zhiyong          # 您的私有仓库
+          token: ${{ secrets.PAT_TOKEN }}     # 需要有访问该仓库的权限
           path: private
 
       - name: 📂 移动脚本到工作目录
-        run: mv private/main.py main.py
+        run: |
+          # 假设仓库中就是 slimenodes1.py，如果不是请根据实际情况修改
+          if [ -f "private/slimenodes1.py" ]; then
+            mv private/slimenodes1.py slimenodes1.py
+          elif [ -f "private/main.py" ]; then
+            mv private/main.py slimenodes1.py
+          else
+            echo "❌ 未找到 slimenodes1.py 或 main.py"
+            ls -la private/
+            exit 1
+          fi
 
       - name: 配置 Python 环境
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: 安装中文字体
+      - name: 安装中文字体（防止截图乱码）
         run: sudo apt-get install -y fonts-noto-cjk
 
-      - name: 🚀 安装并启动代理核心
+      - name: 🚀 安装并启动代理核心（Xray）
         env:
           V2RAY_CONFIG: ${{ secrets.V2RAY_CONFIG }}
         run: |
@@ -36,29 +46,29 @@ jobs:
           unzip -q Xray-linux-64.zip -d xray_bin
           cd xray_bin
 
-          echo "📝 正在写入本地节点配置..."
+          echo "📝 写入节点配置..."
           echo "$V2RAY_CONFIG" > config.json
 
           echo "🔑 赋予可执行权限..."
           chmod +x ./xray
 
-          echo "🚀 正在后台启动核心..."
+          echo "🚀 后台启动 Xray 代理..."
           nohup ./xray run -c config.json > xray.log 2>&1 &
-        
-          echo "⏳ 等待代理初始化 (5秒)..."
+
+          echo "⏳ 等待代理初始化（5秒）..."
           sleep 5
-          
+
           echo "🌐 验证本地 10808 端口连通性..."
           if ! curl -x http://127.0.0.1:10808 -s -I https://www.google.com/generate_204; then
             echo "❌ 代理启动失败或无法连接外网！输出 Xray 日志："
             cat xray.log
-            exit 1 # 强制中断 Workflow，防止白跑
+            exit 1
           else
             echo "✅ 代理连通性测试通过！"
           fi
           cd ..
-          
-      - name: 安装依赖库 (增加 requests)
+
+      - name: 安装依赖库
         run: |
           python -m pip install --upgrade pip
           pip install playwright requests
@@ -72,17 +82,19 @@ jobs:
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
           PROXY: http://127.0.0.1:10808
         run: |
-          python main.py
+          python slimenodes1.py
 
       - name: 更新 Cookie 到 GitHub Secrets
         if: success()
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}   # 需要具有写入 secrets 的权限
         run: |
           if [ -f "new_cookie.txt" ]; then
             NEW_COOKIE=$(cat new_cookie.txt)
             gh secret set SLIMENODES_COOKIE --repo ${{ github.repository }} -b"$NEW_COOKIE"
             echo "✅ Cookie 更新完毕。"
+          else
+            echo "⚠️ 未找到 new_cookie.txt，跳过 Cookie 更新。"
           fi
 
       - name: 上传调试截图
