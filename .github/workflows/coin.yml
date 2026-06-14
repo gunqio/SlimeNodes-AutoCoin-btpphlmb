@@ -9,7 +9,10 @@ jobs:
     steps:
       - name: Checkout 当前仓库
         uses: actions/checkout@v4
-
+      - name: 安装 Playwright 及浏览器
+        run: |
+         pip install playwright
+         playwright install chromium
       - name: 私仓
         uses: actions/checkout@v4
         with:
